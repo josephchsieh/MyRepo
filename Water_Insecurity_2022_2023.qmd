@@ -1,0 +1,218 @@
+---
+title: "Tidy Tuesday 02.04.25"
+author: "Joseph Hsieh"
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: console
+---
+
+## Water Insecurity 2022-2023
+
+> Water insecurity can be influenced by number of social vulnerability indicators—from demographic characteristics to living conditions and socioeconomic status —that vary spatially across the U.S.
+
+### **Variables**
+
+-   geoid
+
+-   name
+
+-   year
+
+-   total popualtion
+
+-   plumbing
+
+-   percent lacking plumbing
+
+```{r}
+water_insecurity_2022 <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2025/2025-01-28/water_insecurity_2022.csv')
+water_insecurity_2023 <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/main/data/2025/2025-01-28/water_insecurity_2023.csv')
+
+# The geometry columns are saved as text with the code to reproduce them.
+water_insecurity_2022 <- water_insecurity_2022 |> 
+  dplyr::mutate(
+    geometry = purrr::map(geometry, \(geo) {
+      eval(parse(text = geo))
+    } )
+  )
+water_insecurity_2023 <- water_insecurity_2023 |> 
+  dplyr::mutate(
+    geometry = purrr::map(geometry, \(geo) {
+      eval(parse(text = geo))
+    } )
+  )
+```
+
+```{r}
+#rename
+water_2022 <- water_insecurity_2022
+water_2023 <- water_insecurity_2023
+
+water_2022 <- water_2022 %>% 
+  select(-geoid, -geometry)
+
+water_2023 <- water_2023 %>% 
+  select(-geoid, -geometry)
+
+water_2022 <- water_2022 %>% 
+  rename(city_state = name, population = total_pop, pctg_no_plumbing = percent_lacking_plumbing)
+
+water_2023 <- water_2023 %>% 
+  rename(city_state = name, population = total_pop, pctg_no_plumbing = percent_lacking_plumbing)
+```
+
+Exploratory Analysis
+
+```{r}
+# Load necessary packages
+library(dplyr)
+library(ggplot2)
+
+# Basic summaries
+summary_2022 <- water_2022 %>%
+  summarise(
+    count = n(),
+    total_population = sum(total_pop, na.rm = TRUE),
+    avg_pct_no_plumbing = mean(percent_lacking_plumbing, na.rm = TRUE),
+    median_pct_no_plumbing = median(percent_lacking_plumbing, na.rm = TRUE),
+    min_pct_no_plumbing = min(percent_lacking_plumbing, na.rm = TRUE),
+    max_pct_no_plumbing = max(percent_lacking_plumbing, na.rm = TRUE)
+  )
+
+summary_2023 <- water_2023 %>%
+  summarise(
+    count = n(),
+    total_population = sum(total_pop, na.rm = TRUE),
+    avg_pct_no_plumbing = mean(percent_lacking_plumbing, na.rm = TRUE),
+    median_pct_no_plumbing = median(percent_lacking_plumbing, na.rm = TRUE),
+    min_pct_no_plumbing = min(percent_lacking_plumbing, na.rm = TRUE),
+    max_pct_no_plumbing = max(percent_lacking_plumbing, na.rm = TRUE)
+  )
+
+# Find areas with highest percentage lacking plumbing
+worst_areas_2022 <- water_2022 %>%
+  arrange(desc(percent_lacking_plumbing)) %>%
+  head(10) %>%
+  select(name, total_pop, percent_lacking_plumbing)
+
+worst_areas_2023 <- water_2023 %>%
+  arrange(desc(percent_lacking_plumbing)) %>%
+  head(10) %>%
+  select(name, total_pop, percent_lacking_plumbing)
+
+# Find areas with lowest percentage lacking plumbing
+best_areas_2022 <- water_2022 %>%
+  arrange(percent_lacking_plumbing) %>%
+  head(10) %>%
+  select(name, total_pop, percent_lacking_plumbing)
+
+best_areas_2023 <- water_2023 %>%
+  arrange(percent_lacking_plumbing) %>%
+  head(10) %>%
+  select(name, total_pop, percent_lacking_plumbing)
+
+# Examine the distribution of plumbing issues by population size
+# Create population categories
+water_2022 <- water_2022 %>%
+  mutate(pop_category = case_when(
+    total_pop < 50000 ~ "< 50K",
+    total_pop < 100000 ~ "50K-100K",
+    total_pop < 500000 ~ "100K-500K",
+    total_pop < 1000000 ~ "500K-1M",
+    TRUE ~ "> 1M"
+  ))
+
+water_2023 <- water_2023 %>%
+  mutate(pop_category = case_when(
+    total_pop < 50000 ~ "< 50K",
+    total_pop < 100000 ~ "50K-100K",
+    total_pop < 500000 ~ "100K-500K",
+    total_pop < 1000000 ~ "500K-1M",
+    TRUE ~ "> 1M"
+  ))
+
+# Group by population category and calculate statistics
+pop_analysis_2022 <- water_2022 %>%
+  group_by(pop_category) %>%
+  summarise(
+    count = n(),
+    avg_pct_no_plumbing = mean(percent_lacking_plumbing, na.rm = TRUE),
+    median_pct_no_plumbing = median(percent_lacking_plumbing, na.rm = TRUE),
+    total_population = sum(total_pop, na.rm = TRUE)
+  )
+
+pop_analysis_2023 <- water_2023 %>%
+  group_by(pop_category) %>%
+  summarise(
+    count = n(),
+    avg_pct_no_plumbing = mean(percent_lacking_plumbing, na.rm = TRUE),
+    median_pct_no_plumbing = median(percent_lacking_plumbing, na.rm = TRUE),
+    total_population = sum(total_pop, na.rm = TRUE)
+  )
+
+# Compare 2022 and 2023 data
+comparison <- water_2022 %>%
+  inner_join(water_2023, by = "name", suffix = c("_2022", "_2023")) %>%
+  mutate(
+    change_pct = percent_lacking_plumbing_2023 - percent_lacking_plumbing_2022,
+    percent_change = (percent_lacking_plumbing_2023 - percent_lacking_plumbing_2022) / percent_lacking_plumbing_2022 * 100
+  )
+
+# Find areas with most improvement
+most_improved <- comparison %>%
+  filter(change_pct < 0) %>%
+  arrange(change_pct) %>%
+  head(10) %>%
+  select(name, total_pop_2022, percent_lacking_plumbing_2022, percent_lacking_plumbing_2023, change_pct, percent_change)
+
+# Find areas with most deterioration
+most_deteriorated <- comparison %>%
+  filter(change_pct > 0) %>%
+  arrange(desc(change_pct)) %>%
+  head(10) %>%
+  select(name, total_pop_2022, percent_lacking_plumbing_2022, percent_lacking_plumbing_2023, change_pct, percent_change)
+
+# Visualizations
+# 1. Distribution of lacking plumbing percentage
+ggplot() +
+  geom_histogram(data = water_2022, aes(x = percent_lacking_plumbing, fill = "2022"), alpha = 0.5, bins = 30) +
+  geom_histogram(data = water_2023, aes(x = percent_lacking_plumbing, fill = "2023"), alpha = 0.5, bins = 30) +
+  scale_fill_manual(values = c("2022" = "blue", "2023" = "red"), name = "Year") +
+  labs(title = "Distribution of Percentage Lacking Plumbing", 
+       x = "Percentage", y = "Count") +
+  theme_minimal()
+
+# 2. Boxplot of plumbing issues by population category 
+ggplot(water_2022, aes(x = pop_category, y = percent_lacking_plumbing)) +
+  geom_boxplot(fill = "lightblue") +
+  labs(title = "Plumbing Issues by Population Size (2022)",
+       x = "Population Category", y = "Percentage Lacking Plumbing") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(water_2023, aes(x = pop_category, y = percent_lacking_plumbing)) +
+  geom_boxplot(fill = "lightgreen") +
+  labs(title = "Plumbing Issues by Population Size (2023)",
+       x = "Population Category", y = "Percentage Lacking Plumbing") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# 3. Scatter plot of 2022 vs. 2023 values with diagonal reference line
+ggplot(comparison, aes(x = percent_lacking_plumbing_2022, y = percent_lacking_plumbing_2023)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +
+  labs(title = "Percentage Lacking Plumbing: 2022 vs 2023",
+       x = "Percentage in 2022",
+       y = "Percentage in 2023") +
+  theme_minimal()
+```
+
+You can add options to executable code like this
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
